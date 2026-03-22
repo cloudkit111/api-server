@@ -2,11 +2,12 @@ import express from "express";
 import { connectToDatabase } from "./src/db/db.js";
 import cors from "cors";
 import cookieParser from "cookie-parser"
+import { githubRouter } from "./src/Router/login.router.js";
 
 const app = express();
 
 const corsOptions = {
-    origin: "*",
+    origin: "http://localhost:5173",
     credentials: true,
     methods: "GET, POST, DELETE, PATCH, HEAD, PUT, OPTIONS",
     allowedHeaders: [
@@ -29,6 +30,8 @@ app.use(express.static("/tmp", { index: false }));
 
 const port = process.env.PORT;
 
+
+app.use("/auth",githubRouter);
 
 app.get("/", (req, res) => {
     res.status(200).json({ msg: "backend is running" });
