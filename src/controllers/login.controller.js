@@ -76,7 +76,9 @@ export const githubLogin = async (req, res) => {
                 email: primaryEmail,
                 repos: repoRes.data.map(repo => ({
                     name: repo.name,
-                    clone_url: repo.clone_url
+                    clone_url: repo.clone_url,
+                    private: repo.private,
+                    created_at: repo.created_at,
                 }))
             });
         }
@@ -113,11 +115,11 @@ export const getCurrentUser = async (req, res) => {
 }
 
 export const logout = (req, res) => {
-  res.clearCookie("token", {
-    httpOnly: true,
-    secure: false, // true in production (HTTPS)
-    sameSite: "lax",
-  });
+    res.clearCookie("token", {
+        httpOnly: true,
+        secure: false, // true in production (HTTPS)
+        sameSite: "lax",
+    });
 
-  return res.status(200).json({ message: "Logged out successfully" });
+    return res.status(200).json({ message: "Logged out successfully" });
 };
