@@ -1,25 +1,32 @@
 import express from "express";
 import { connectToDatabase } from "./src/db/db.js";
 import cors from "cors";
-import cookieParser from "cookie-parser"
+import cookieParser from "cookie-parser";
 import { githubRouter } from "./src/Router/login.router.js";
+import { generateSlug } from "random-word-slugs";
+import {
+  ECS,
+  ECSClient,
+  RunTaskCommand,
+  RuntimePlatform$,
+} from "@aws-sdk/client-ecs";
 
 const app = express();
 
 const corsOptions = {
-    origin: "http://localhost:5173",
-    credentials: true,
-    methods: "GET, POST, DELETE, PATCH, HEAD, PUT, OPTIONS",
-    allowedHeaders: [
-        "Content-Type",
-        "Authorization",
-        "Access-Control-Allow-Credentials",
-        "cache-control",
-        "svix-id",
-        "svix-timestamp",
-        "svix-signature",
-    ],
-    exposedHeaders: ["Authorization"],
+  origin: "http://localhost:5173",
+  credentials: true,
+  methods: "GET, POST, DELETE, PATCH, HEAD, PUT, OPTIONS",
+  allowedHeaders: [
+    "Content-Type",
+    "Authorization",
+    "Access-Control-Allow-Credentials",
+    "cache-control",
+    "svix-id",
+    "svix-timestamp",
+    "svix-signature",
+  ],
+  exposedHeaders: ["Authorization"],
 };
 
 app.use(express.json());
@@ -30,16 +37,68 @@ app.use(express.static("/tmp", { index: false }));
 
 const port = process.env.PORT;
 
+const ecsClient = new ECSClient({
+  region: "ap-south-1",
+  credentials: {
+    accessKeyId: "AKIAUVIGFTDBBC5742PF",
+    secretAccessKey: "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",
+  },
+});
 
-app.use("/auth",githubRouter);
+const CONFIG = {
+  CLUSTER: "arn:aws:ecs:ap-south-1:320524884162:cluster/builder-cluster",
+  TASK: "arn:aws:ecs:ap-south-1:320524884162:task-definition/builder-task",
+};
+
+app.use("/auth", githubRouter);
 
 app.get("/", (req, res) => {
-    res.status(200).json({ msg: "backend is running" });
+  res.status(200).json({ msg: "API Service is active.." });
+});
+
+app.post("/project", async (req,res) => {
+  const { gitURL } = req.body;
+  const projectSlug = generateSlug();
+
+  //   spin container
+  const command = new RunTaskCommand({
+    cluster: CONFIG.CLUSTER,
+    taskDefinition: CONFIG.TASK,
+    launchType: "FARGATE",
+    count: 1,
+    networkConfiguration: {
+      awsvpcConfiguration: {
+        assignPublicIp: "ENABLED",
+        subnets: [
+          "subnet-030ec22e04300ec0b",
+          "subnet-0689bf932718d6641",
+          "subnet-0b7070c717b0d1cfe",
+        ],
+        securityGroups: ["sg-004a16e50dcc52dfe"],
+      },
+    },
+    overrides: {
+      containerOverrides: [
+        {
+          name: "builder-image",
+          environment: [
+            { name: "GIT_REPOSITORY_URL", value: gitURL },
+            { name: "PROJECT_ID", value: projectSlug },
+          ],
+        },
+      ],
+    },
+  });
+
+  await ecsClient.send(command);
+  return res.json({
+    status: "queued",
+    data: { projectSlug, url: `http://${projectSlug}.localhost:8000` },
+  });
 });
 
 connectToDatabase().then(() => {
-    app.listen(port, () => {
-        console.log(`api server is running on port ${port}`)
-    })
+  app.listen(port, () => {
+    console.log(`api server is running on port ${port}`);
+  });
 });
-
