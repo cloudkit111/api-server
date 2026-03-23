@@ -10,6 +10,8 @@ import {
   RunTaskCommand,
   RuntimePlatform$,
 } from "@aws-sdk/client-ecs";
+import { Server } from "socket.io";
+import Valkey from "ioredis";
 
 const app = express();
 
@@ -56,6 +58,30 @@ app.get("/", (req, res) => {
   res.status(200).json({ msg: "API Service is active.." });
 });
 
+
+// socket io and ioredis config /////////
+const io = new Server({cors : { origin : "*"}});
+
+io.listen(9001,() => {
+  console.log(`socket is running on port ${port} `)
+})
+
+io.on('connection', (socket) => {
+   socket.on('subscribe' , channel => {
+      socket.join(channel);
+      socket.emit("message", `joined ${channel}`)
+   })
+});
+
+
+const service_url = process.env.REDIS_CONNECTION_STRING;
+
+console.log(service_url)
+
+const subscriber = new Valkey(service_url);
+
+/////////////////////////////////////////
+
 app.post("/project", async (req,res) => {
   const { gitURL } = req.body;
   const projectSlug = generateSlug();
@@ -96,6 +122,13 @@ app.post("/project", async (req,res) => {
     data: { projectSlug, url: `http://${projectSlug}.localhost:8000` },
   });
 });
+
+const LogFunction = async() => {
+   subscriber.psubscribe('logs:*')
+   subscriber.on('pmessage',(patten,message,channel) => {
+     io.to(channel).emit(message);
+   })
+}
 
 connectToDatabase().then(() => {
   app.listen(port, () => {
