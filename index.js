@@ -42,8 +42,8 @@ const port = process.env.PORT;
 const ecsClient = new ECSClient({
   region: "ap-south-1",
   credentials: {
-    accessKeyId: "AKIAUVIGFTDBBC5742PF",
-    secretAccessKey: "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",
+    accessKeyId: "AKIAUVIGFTDBO3JCYJEU",
+    secretAccessKey: "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",
   },
 });
 
@@ -110,6 +110,7 @@ app.post("/project", async (req,res) => {
           environment: [
             { name: "GIT_REPOSITORY_URL", value: gitURL },
             { name: "PROJECT_ID", value: projectSlug },
+            {name:"REDIS_CONNECTION_STRING",value:"rediss://default:AVNS_nI6Ca309PlYXB3tIIwY@valkey-2e0f160c-cloudkit111.g.aivencloud.com:28310"}
           ],
         },
       ],
@@ -129,6 +130,7 @@ const LogFunction = async() => {
      io.to(channel).emit(message);
    })
 }
+LogFunction();
 
 connectToDatabase().then(() => {
   app.listen(port, () => {
