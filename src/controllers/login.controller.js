@@ -99,7 +99,7 @@ export const githubLogin = async (req, res) => {
         });
 
         // 8. Redirect
-        return res.redirect("http://localhost:5173/dashboard");
+        return res.redirect(`${process.env.CALLBACK}/dashboard`);
 
     } catch (error) {
         console.log(error);
