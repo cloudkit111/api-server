@@ -125,11 +125,13 @@ app.post("/project", async (req,res) => {
   });
 });
 
-const LogFunction = async() => {
-   subscriber.psubscribe('logs:*')
-   subscriber.on('pmessage',(patten,message,channel) => {
-     io.to(channel).emit(message);
-   })
+const LogFunction = async () => {
+  console.log("connected");
+  subscriber.psubscribe('logs:*')
+  subscriber.on('pmessage', (pattern, channel, message) => {
+    const parsed = JSON.parse(message);
+    io.to(channel).emit("message", parsed.log);
+  });
 }
 LogFunction();
 
