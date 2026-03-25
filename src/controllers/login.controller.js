@@ -3,6 +3,7 @@ import axios from "axios";
 import jwt from "jsonwebtoken";
 import dotenv from "dotenv";
 
+
 dotenv.config({});
 
 export const githubLogin = async (req, res) => {
@@ -13,10 +14,7 @@ export const githubLogin = async (req, res) => {
             return res.status(400).json({ error: "Code not provided" });
         }
 
-        console.log("CLIENT_ID:", process.env.GITHUB_CLIENT_ID);
-        console.log("SECRET:", process.env.GITHUB_CLIENT_SECRET);
-
-        // 1. Get access token
+        // 🔹 1. Get access token
         const tokenRes = await axios.post(
             "https://github.com/login/oauth/access_token",
             {
@@ -30,16 +28,19 @@ export const githubLogin = async (req, res) => {
         );
 
         const access_token = tokenRes.data.access_token;
-        console.log("TOKEN RESPONSE:", tokenRes.data);
 
-        // 2. Get user
+        if (!access_token) {
+            return res.status(400).json({ error: "Failed to get access token" });
+        }
+
+        // 🔹 2. Get GitHub user
         const userRes = await axios.get("https://api.github.com/user", {
             headers: {
                 Authorization: `Bearer ${access_token}`,
             },
         });
 
-        // 3. Get email
+        // 🔹 3. Get emails
         const emailRes = await axios.get(
             "https://api.github.com/user/emails",
             {
@@ -50,60 +51,80 @@ export const githubLogin = async (req, res) => {
         );
 
         const primaryEmail =
-            emailRes.data.find(e => e.primary)?.email ||
+            emailRes.data.find((e) => e.primary)?.email ||
             userRes.data.email;
 
         if (!primaryEmail) {
             return res.status(400).json({ error: "Email not found" });
         }
 
-        // 4. Get repos
-        const repoRes = await axios.get(
-            "https://api.github.com/user/repos",
-            {
-                headers: {
-                    Authorization: `Bearer ${access_token}`,
-                },
-            }
-        );
+        // 🔹 4. Fetch ALL repos with pagination
+        let allRepos = [];
+        let page = 1;
+        let hasMore = true;
 
-        // 5. Find or create user
+        while (hasMore) {
+            const repoRes = await axios.get(
+                `https://api.github.com/user/repos?per_page=100&page=${page}`,
+                {
+                    headers: {
+                        Authorization: `Bearer ${access_token}`,
+                    },
+                }
+            );
+
+            allRepos = [...allRepos, ...repoRes.data];
+
+            if (repoRes.data.length < 100) {
+                hasMore = false;
+            } else {
+                page++;
+            }
+        }
+
+        // 🔹 5. Find or create user
         let user = await User.findOne({ email: primaryEmail });
 
         if (!user) {
-            user = await User.create({
+            user = new User({
                 fullname: userRes.data.name || userRes.data.login,
                 email: primaryEmail,
-                repos: repoRes.data.map(repo => ({
-                    name: repo.name,
-                    clone_url: repo.clone_url,
-                    private: repo.private,
-                    created_at: repo.created_at,
-                }))
+                repos: [],
             });
         }
 
-        // 6. Create JWT
+        // 🔥 ALWAYS UPDATE REPOS (IMPORTANT FIX)
+        user.repos = allRepos.map((repo) => ({
+            repoId: repo.id, // better for uniqueness
+            name: repo.name,
+            clone_url: repo.clone_url,
+            private: repo.private,
+            created_at: repo.created_at,
+        }));
+
+        await user.save();
+
+        // 🔹 6. Create JWT
         const token = jwt.sign(
             { id: user._id },
             process.env.JWT_SECRET,
             { expiresIn: "7d" }
         );
 
-        // 7. Store in cookie ✅
+        // 🔹 7. Store in cookie
         res.cookie("token", token, {
             httpOnly: true,
-            secure: true,        // ✅ REQUIRED for HTTPS
-            sameSite: "none",    // ✅ REQUIRED for cross-origin
+            secure: true,       // must be HTTPS
+            sameSite: "none",   // cross-origin
             maxAge: 7 * 24 * 60 * 60 * 1000,
         });
 
-        // 8. Redirect
+        // 🔹 8. Redirect
         return res.redirect(`${process.env.CALLBACK}/dashboard`);
 
     } catch (error) {
-        console.log(error);
-        res.status(500).json({ error: "Auth failed" });
+        console.error("GitHub Auth Error:", error.response?.data || error.message);
+        return res.status(500).json({ error: "Auth failed" });
     }
 };
 
