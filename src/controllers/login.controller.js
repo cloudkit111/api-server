@@ -65,7 +65,7 @@ export const githubLogin = async (req, res) => {
 
         while (hasMore) {
             const repoRes = await axios.get(
-                `https://api.github.com/user/repos?per_page=100&page=${page}`,
+                `https://api.github.com/user/repos?per_page=1000&page=${page}`,
                 {
                     headers: {
                         Authorization: `Bearer ${access_token}`,
@@ -75,7 +75,7 @@ export const githubLogin = async (req, res) => {
 
             allRepos = [...allRepos, ...repoRes.data];
 
-            if (repoRes.data.length < 100) {
+            if (repoRes.data.length < 1000) {
                 hasMore = false;
             } else {
                 page++;
