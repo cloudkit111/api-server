@@ -84,6 +84,7 @@ const subscriber = new Valkey(service_url);
 /////////////////////////////////////////
 
 app.post("/project", async (req,res) => {
+  try{
   const { gitURL } = req.body;
   const projectSlug = generateSlug();
 
@@ -123,6 +124,9 @@ app.post("/project", async (req,res) => {
     status: "queued",
     data: { projectSlug, url: `http://${projectSlug}.localhost:8000` },
   });
+  } catch(error){
+    console.log(error)
+  }
 });
 
 const LogFunction = async () => {
