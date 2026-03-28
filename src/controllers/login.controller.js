@@ -116,8 +116,8 @@ export const githubLogin = async (req, res) => {
     // 🔹 7. Store in cookie
     res.cookie("token", token, {
       httpOnly: true,
-      secure: false,
-      sameSite: "lax",
+      secure: true,
+      sameSite: "none",
       maxAge: 7 * 24 * 60 * 60 * 1000,
     });
  
@@ -137,7 +137,7 @@ export const getCurrentUser = async (req, res) => {
 export const logout = (req, res) => {
   res.clearCookie("token", {
     httpOnly: true,
-    secure: false, // true in production (HTTPS)
+    secure: true, // true in production (HTTPS)
     sameSite: "none",
   });
 
