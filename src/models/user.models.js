@@ -24,6 +24,11 @@ const userSchema = new mongoose.Schema({
         type: Boolean,
         required: true
       },
+      Projects:[{
+         project_url : {type:String},
+         slug:{type:String},
+         repoName : {type:String},
+      }],
       created_at: {
         type: Date
       }
