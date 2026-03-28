@@ -14,16 +14,17 @@ import { Server } from "socket.io";
 import Valkey from "ioredis";
 import http from "http";
 import logger from "./src/utils/logger.js";
+import { projectRouter } from "./src/Router/Project.router.js";
 
 const app = express();
 const server = http.createServer(app);
 
 const io = new Server(server, {
-  cors: { origin: "https://cloud-kit.app" },
+  cors: { origin: ["https://cloud-kit.app","http://localhost:5173"] },
 });
 
 const corsOptions = {
-  origin: "https://cloud-kit.app",
+  origin: ["https://cloud-kit.app" , "http://localhost:5173"],
   credentials: true,
   methods: "GET, POST, DELETE, PATCH, HEAD, PUT, OPTIONS",
   allowedHeaders: [
