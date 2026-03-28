@@ -108,8 +108,8 @@ export const githubLogin = async (req, res) => {
     // 🔹 7. Store in cookie
     res.cookie("token", token, {
       httpOnly: true,
-      secure: false, // must be HTTPS
-      sameSite: "lax", // cross-origin
+      secure: true, // must be HTTPS
+      sameSite: "none", // cross-origin
       maxAge: 7 * 24 * 60 * 60 * 1000,
     });
 
