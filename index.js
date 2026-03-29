@@ -68,32 +68,6 @@ app.get("/", (req, res) => {
   res.status(200).json({ msg: "API Service is active.." });
 });
 
-// // FAKE LOGS FOR DEV TESTING
-// const startFakeLogs = (channel) => {
-//   const steps = [
-//     "🚀 Build Starting...",
-//     "📦 Installing dependencies...",
-//     "📦 Resolving packages...",
-//     "🔧 Running build...",
-//     "⚙️ Optimizing assets...",
-//     "📁 Uploading files...",
-//     "☁️ Deployment in progress...",
-//     "✅ Deployment Complete!",
-//   ];
-
-//   let i = 0;
-
-//   const interval = setInterval(() => {
-//     if (i >= steps.length) {
-//       clearInterval(interval);
-//       return;
-//     }
-
-//     io.to(channel).emit("message", steps[i]);
-//     i++;
-//   }, 3200);
-// };
-
 
 io.on("connection", (socket) => {
   logger.info({ socketId: socket.id }, "Client connected");
