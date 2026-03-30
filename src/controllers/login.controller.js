@@ -116,7 +116,7 @@ export const githubLogin = async (req, res) => {
 
     res.cookie("token", token, {
       httpOnly: true,
-      maxAge: 2 * 60 * 1000,
+      maxAge: 30 * 60 * 1000,
       domain:'.cloud-kit.app',
       sameSite: "none",
       secure: true,
