@@ -15,7 +15,7 @@ export const githubLogin = async (req, res) => {
       return res.status(400).json({ error: "Code not provided" });
     }
  
-    // 🔹 1. Get access token
+
     const tokenRes = await axios.post(
       "https://github.com/login/oauth/access_token",
       {
@@ -34,14 +34,14 @@ export const githubLogin = async (req, res) => {
       return res.status(400).json({ error: "Failed to get access token" });
     }
  
-    // 🔹 2. Get GitHub user
+
     const userRes = await axios.get("https://api.github.com/user", {
       headers: {
         Authorization: `Bearer ${access_token}`,
       },
     });
  
-    // 🔹 3. Get emails
+
     const emailRes = await axios.get("https://api.github.com/user/emails", {
       headers: {
         Authorization: `Bearer ${access_token}`,
@@ -55,7 +55,7 @@ export const githubLogin = async (req, res) => {
       return res.status(400).json({ error: "Email not found" });
     }
  
-    // 🔹 4. Fetch ALL repos with pagination
+
     let allRepos = [];
     let page = 1;
     let hasMore = true;
@@ -79,7 +79,7 @@ export const githubLogin = async (req, res) => {
       }
     }
  
-    // 🔹 5. Find or create user
+
     let user = await User.findOne({ email: primaryEmail });
  
     if (!user) {
@@ -90,38 +90,39 @@ export const githubLogin = async (req, res) => {
       });
     }
  
-    // ✅ Build a map of existing repos to preserve their Projects
+
     const existingReposMap = {};
     user.repos.forEach((repo) => {
       existingReposMap[repo.name] = repo.Projects || [];
     });
  
-    // ✅ Update repos from GitHub but preserve saved Projects
+
     user.repos = allRepos.map((repo) => ({
       repoId: repo.id,
       name: repo.name,
       clone_url: repo.clone_url,
       private: repo.private,
       created_at: repo.created_at,
-      Projects: existingReposMap[repo.name] || [], // ✅ keep saved projects
+      Projects: existingReposMap[repo.name] || [], 
     }));
  
     await user.save();
  
-    // 🔹 6. Create JWT
+
     const token = jwt.sign({ id: user._id }, process.env.JWT_SECRET, {
       expiresIn: "7d",
     });
  
-    // 🔹 7. Store in cookie
+
     res.cookie("token", token, {
       httpOnly: true,
-      secure: true,
+      maxAge: 2 * 60 * 1000,
+      domain:'.cloud-kit.app',
       sameSite: "none",
-      maxAge: 7 * 24 * 60 * 60 * 1000,
+      secure: true,
     });
  
-    // 🔹 8. Redirect
+
     return res.redirect(`${process.env.CALLBACK}/dashboard`);
   } catch (error) {
     console.error("GitHub Auth Error:", error.response?.data || error.message);
