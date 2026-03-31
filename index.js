@@ -103,7 +103,7 @@ app.post("/project", async (req, res) => {
     let projectSlug = ""; // ✅ use let
 
     if (userSlug) {
-      conse 
+ 
       const nameExisted = await User.findOne({
         "repos.Projects.slug": userSlug
       });
