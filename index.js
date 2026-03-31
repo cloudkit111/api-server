@@ -15,16 +15,17 @@ import Valkey from "ioredis";
 import http from "http";
 import logger from "./src/utils/logger.js";
 import { projectRouter } from "./src/Router/Project.router.js";
+import { User } from "./src/models/user.models.js";
 
 const app = express();
 const server = http.createServer(app);
 
 const io = new Server(server, {
-  cors: { origin: ["https://cloud-kit.app","http://localhost:5173"] },
+  cors: { origin: ["https://cloud-kit.app", "http://localhost:5173"] },
 });
 
 const corsOptions = {
-  origin: ["https://cloud-kit.app" , "http://localhost:5173"],
+  origin: ["https://cloud-kit.app", "http://localhost:5173"],
   credentials: true,
   methods: "GET, POST, DELETE, PATCH, HEAD, PUT, OPTIONS",
   allowedHeaders: [
@@ -62,7 +63,7 @@ const CONFIG = {
 };
 
 app.use("/auth", githubRouter);
-app.use("/api",projectRouter);
+app.use("/api", projectRouter);
 
 app.get("/", (req, res) => {
   res.status(200).json({ msg: "API Service is active.." });
@@ -95,11 +96,26 @@ const subscriber = new Valkey(service_url);
 
 app.post("/project", async (req, res) => {
   try {
-    const { gitURL } = req.body;
+    const { gitURL, userSlug } = req.body;
 
     logger.info({ gitURL }, "Project creation started");
 
-    const projectSlug = generateSlug();
+    let projectSlug = ""; // ✅ use let
+
+    if (userSlug) {
+      conse 
+      const nameExisted = await User.findOne({
+        "repos.Projects.slug": userSlug
+      });
+
+      if (nameExisted) {
+        return res.status(409).json({ msg: "Name already exists" });
+      }
+
+      projectSlug = userSlug;
+    } else {
+      projectSlug = generateSlug();
+    }
 
     logger.info({ projectSlug }, "Generated project slug");
 
