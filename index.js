@@ -16,6 +16,7 @@ import http from "http";
 import logger from "./src/utils/logger.js";
 import { projectRouter } from "./src/Router/Project.router.js";
 import { User } from "./src/models/user.models.js";
+import { verifyJWT } from "./src/middlewares/auth.middlewares.js";
 
 const app = express();
 const server = http.createServer(app);
@@ -94,18 +95,24 @@ const subscriber = new Valkey(service_url);
 
 /////////////////////////////////////////
 
-app.post("/project", async (req, res) => {
+app.post("/project", verifyJWT, async (req, res) => {
   try {
-    const { gitURL, userSlug } = req.body;
+    const { gitURL, userSlug, envs, repoName } = req.body;
+    const userId = req.user.id;
+
+    // 🔥 Validate required fields
+    if (!gitURL || !repoName) {
+      return res.status(400).json({ msg: "gitURL and repoName required" });
+    }
 
     logger.info({ gitURL }, "Project creation started");
 
-    let projectSlug = ""; // ✅ use let
+    // 🔥 STEP 1: Generate slug
+    let projectSlug = "";
 
     if (userSlug) {
- 
       const nameExisted = await User.findOne({
-        "repos.Projects.slug": userSlug
+        "repos.Projects.slug": userSlug,
       });
 
       if (nameExisted) {
@@ -119,7 +126,33 @@ app.post("/project", async (req, res) => {
 
     logger.info({ projectSlug }, "Generated project slug");
 
-    //   spin container
+    // 🔥 STEP 2: Validate envs
+    if (envs && typeof envs !== "object") {
+      return res.status(400).json({ msg: "Invalid env format" });
+    }
+
+    // 🔥 STEP 3: Store project in DB
+    const updateResult = await User.updateOne(
+      { _id: userId, "repos.name": repoName },
+      {
+        $push: {
+          "repos.$.Projects": {
+            project_url: `https://${projectSlug}.cloud-kit.app`,
+            slug: projectSlug,
+            repoName,
+            envs: envs || {},
+          },
+        },
+      }
+    );
+
+    if (updateResult.modifiedCount === 0) {
+      return res.status(404).json({ msg: "Repo not found" });
+    }
+
+    logger.info({ projectSlug }, "Project stored in DB");
+
+    // 🔥 STEP 4: Trigger ECS task
     const command = new RunTaskCommand({
       cluster: CONFIG.CLUSTER,
       taskDefinition: CONFIG.TASK,
@@ -143,10 +176,16 @@ app.post("/project", async (req, res) => {
             environment: [
               { name: "GIT_REPOSITORY_URL", value: gitURL },
               { name: "PROJECT_ID", value: projectSlug },
+
+              // 🔥 ENV INJECTION (MOST IMPORTANT)
+              {
+                name: "PROJECT_ENVS",
+                value: JSON.stringify(envs || {}),
+              },
+
               {
                 name: "REDIS_CONNECTION_STRING",
-                value:
-                  "rediss://default:AVNS_nI6Ca309PlYXB3tIIwY@valkey-2e0f160c-cloudkit111.g.aivencloud.com:28310",
+                value: process.env.REDIS_CONNECTION_STRING,
               },
             ],
           },
@@ -156,17 +195,24 @@ app.post("/project", async (req, res) => {
 
     await ecsClient.send(command);
 
-    // 🔥 start fake logs here
-    // startFakeLogs(`logs:${projectSlug}`);
-
     logger.info({ projectSlug }, "Build queued");
-    return res.json({
+
+    // 🔥 STEP 5: Response
+    return res.status(200).json({
       status: "queued",
-      data: { projectSlug, url: `https://${projectSlug}.cloud-kit.app` },
+      data: {
+        projectSlug,
+        url: `https://${projectSlug}.cloud-kit.app`,
+      },
     });
+
   } catch (error) {
-    logger.error({ service_url }, "Redis connection string loaded");
-    return res.status(500).json({ error });
+    logger.error(error, "Project creation failed");
+
+    return res.status(500).json({
+      msg: "Internal server error",
+      error: error.message,
+    });
   }
 });
 
