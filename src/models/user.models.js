@@ -28,6 +28,10 @@ const userSchema = new mongoose.Schema({
          project_url : {type:String},
          slug:{type:String},
          repoName : {type:String},
+         envs: {
+           type: Map,
+           of: String
+               }
       }],
       created_at: {
         type: Date
