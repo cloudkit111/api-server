@@ -30,7 +30,8 @@ const userSchema = new mongoose.Schema({
          repoName : {type:String},
          envs: {
            type: Map,
-           of: String
+           of: String,
+           default: {}
                }
       }],
       created_at: {
