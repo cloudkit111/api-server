@@ -99,6 +99,104 @@ const subscriber = new Valkey(service_url);
 
 /////////////////////////////////////////
 
+
+// github bwehook ci/cd pipeline //
+////////////////////////////////////////////
+app.post("/webhook/github", async (req, res) => {
+  let repoName = "";
+
+  try {
+    logger.info("🔥 GitHub webhook received");
+
+    if (!verifySignature(req)) {
+      return res.sendStatus(401);
+    }
+
+    const repoUrl = req.body.repository?.clone_url;
+    repoName = req.body.repository?.name;
+    const branch = req.body.ref;
+
+    if (branch !== "refs/heads/main") {
+      return res.sendStatus(200);
+    }
+
+    if (!repoUrl || !repoName) {
+      return res.sendStatus(400);
+    }
+
+    if (activeBuilds.has(repoName)) {
+      return res.sendStatus(200);
+    }
+
+    activeBuilds.add(repoName);
+
+    const user = await User.findOne({
+      "repos.name": repoName,
+    });
+
+    if (!user) return res.sendStatus(404);
+
+    const repo = user.repos.find(r => r.name === repoName);
+    const project = repo?.Projects?.slice(-1)[0];
+
+    if (!project) return res.sendStatus(404);
+
+    const command = new RunTaskCommand({
+      cluster: CONFIG.CLUSTER,
+      taskDefinition: CONFIG.TASK,
+      launchType: "FARGATE",
+      count: 1,
+      networkConfiguration: {
+        awsvpcConfiguration: {
+          assignPublicIp: "ENABLED",
+          subnets: [
+            "subnet-030ec22e04300ec0b",
+            "subnet-0689bf932718d6641",
+            "subnet-0b7070c717b0d1cfe",
+          ],
+          securityGroups: ["sg-004a16e50dcc52dfe"],
+        },
+      },
+      overrides: {
+        containerOverrides: [
+          {
+            name: "builder-image",
+            environment: [
+              { name: "GIT_REPOSITORY_URL", value: repoUrl },
+              { name: "PROJECT_ID", value: project.slug },
+              {
+                name: "PROJECT_ENVS",
+                value: JSON.stringify(project.envs || {}),
+              },
+              {
+                name: "REDIS_CONNECTION_STRING",
+                value: process.env.REDIS_CONNECTION_STRING,
+              },
+            ],
+          },
+        ],
+      },
+    });
+
+    await ecsClient.send(command);
+
+    logger.info("🚀 Auto deploy triggered");
+    return res.sendStatus(200);
+
+  } catch (error) {
+    logger.error(error);
+    return res.sendStatus(500);
+
+  } finally {
+    if (repoName) {
+      activeBuilds.delete(repoName); // ✅ ALWAYS runs
+    }
+  }
+});
+
+
+///////////////////////////////////////////
+
 app.post("/project", verifyJWT, async (req, res) => {
   try {
     const { gitURL, userSlug, envs, repoName } = req.body;
