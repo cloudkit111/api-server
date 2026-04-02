@@ -67,9 +67,10 @@ app.post(
 
       console.log({ repoName, branch });
 
-      if (branch !== "refs/heads/main") {
-        return res.sendStatus(200);
-      }
+      if (!branch?.endsWith("main")) {
+  console.log("❌ Not main branch:", branch);
+  return res.sendStatus(200);
+}
 
       if (!repoUrl || !repoName) {
         return res.sendStatus(400);
