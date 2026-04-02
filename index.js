@@ -17,7 +17,6 @@ import logger from "./src/utils/logger.js";
 import { projectRouter } from "./src/Router/Project.router.js";
 import { User } from "./src/models/user.models.js";
 import { verifyJWT } from "./src/middlewares/auth.middlewares.js";
-import crypto from "crypto";
 
 const app = express();
 const server = http.createServer(app);
@@ -42,114 +41,6 @@ const corsOptions = {
   exposedHeaders: ["Authorization"],
 };
 
-// github bwehook ci/cd pipeline //
-////////////////////////////////////////////
-const activeBuilds = new Set();
-
-app.post(
-  "/webhook/github",express.raw({ type: "application/json" }),
-  async (req, res) => {
-    let repoName = "";
-
-    try {
-      console.log("🔥 WEBHOOK HIT");
-
-      if (!verifySignature(req)) {
-        console.log("❌ Signature failed");
-        return res.sendStatus(401);
-      }
-
-      const payload = JSON.parse(req.body.toString());
-
-      const repoUrl = payload.repository?.clone_url;
-      repoName = payload.repository?.name;
-      const branch = payload.ref;
-
-      console.log({ repoName, branch });
-
-      if (!branch?.endsWith("main")) {
-  console.log("❌ Not main branch:", branch);
-  return res.sendStatus(200);
-}
-
-      if (!repoUrl || !repoName) {
-        return res.sendStatus(400);
-      }
-
-      if (activeBuilds.has(repoName)) {
-        return res.sendStatus(200);
-      }
-
-      activeBuilds.add(repoName);
-
-      const user = await User.findOne({
-        "repos.name": repoName,
-      });
-
-      if (!user) return res.sendStatus(404);
-
-      const repo = user.repos.find(r => r.name === repoName);
-      const project = repo?.Projects?.slice(-1)[0];
-
-      if (!project) return res.sendStatus(404);
-
-      const command = new RunTaskCommand({
-        cluster: CONFIG.CLUSTER,
-        taskDefinition: CONFIG.TASK,
-        launchType: "FARGATE",
-        count: 1,
-        networkConfiguration: {
-          awsvpcConfiguration: {
-            assignPublicIp: "ENABLED",
-            subnets: [
-              "subnet-030ec22e04300ec0b",
-              "subnet-0689bf932718d6641",
-              "subnet-0b7070c717b0d1cfe",
-            ],
-            securityGroups: ["sg-004a16e50dcc52dfe"],
-          },
-        },
-        overrides: {
-          containerOverrides: [
-            {
-              name: "builder-image",
-              environment: [
-                { name: "GIT_REPOSITORY_URL", value: repoUrl },
-                { name: "PROJECT_ID", value: project.slug },
-                {
-                  name: "PROJECT_ENVS",
-                  value: JSON.stringify(project.envs || {}),
-                },
-                {
-                  name: "REDIS_CONNECTION_STRING",
-                  value: process.env.REDIS_CONNECTION_STRING,
-                },
-              ],
-            },
-          ],
-        },
-      });
-
-      await ecsClient.send(command);
-
-      console.log("🚀 Auto deploy triggered");
-
-      return res.sendStatus(200);
-
-    } catch (error) {
-      console.error(error);
-      return res.sendStatus(500);
-
-    } finally {
-      if (repoName) {
-        activeBuilds.delete(repoName);
-      }
-    }
-  }
-);
-
-///////////////////////////////////////////
-
 app.use(express.json());
 app.set("trust proxy", 1);
 app.use(express.urlencoded({ extended: true }));
@@ -172,35 +63,11 @@ const CONFIG = {
   TASK: "arn:aws:ecs:ap-south-1:320524884162:task-definition/builder-task",
 };
 
-// varify github signature
-function verifySignature(req) {
-  const signature = req.headers["x-hub-signature-256"];
-  if (!signature) return false;
-
-  const hmac = crypto.createHmac(
-    "sha256",
-    process.env.GITHUB_WEBHOOK_SECRET
-  );
-
-  const digest =
-    "sha256=" +
-    hmac.update(req.body).digest("hex");
-
-  return crypto.timingSafeEqual(
-    Buffer.from(signature),
-    Buffer.from(digest)
-  );
-}
-
 app.use("/auth", githubRouter);
 app.use("/api", projectRouter);
 
 app.get("/", (req, res) => {
   res.status(200).json({ msg: "API Service is active.." });
-});
-
-app.get("/webhook/github", (req, res) => {
-  res.send("Webhook route working");
 });
 
 
@@ -227,7 +94,6 @@ logger.info({ service_url }, "Redis connection string loaded");
 const subscriber = new Valkey(service_url);
 
 /////////////////////////////////////////
-
 
 app.post("/project", verifyJWT, async (req, res) => {
   try {
