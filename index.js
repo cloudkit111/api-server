@@ -70,6 +70,11 @@ app.get("/", (req, res) => {
   res.status(200).json({ msg: "API Service is active.." });
 });
 
+app.post("/webhook/github", (req, res) => {
+  console.log("🔥 GitHub webhook received");
+  res.sendStatus(200);
+});
+
 
 io.on("connection", (socket) => {
   logger.info({ socketId: socket.id }, "Client connected");
