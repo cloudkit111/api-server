@@ -70,9 +70,8 @@ app.get("/", (req, res) => {
   res.status(200).json({ msg: "API Service is active.." });
 });
 
-app.post("/webhook/github", (req, res) => {
-  console.log("🔥 GitHub webhook received");
-  res.sendStatus(200);
+app.get("/webhook/github", (req, res) => {
+  res.send("Webhook route working");
 });
 
 
