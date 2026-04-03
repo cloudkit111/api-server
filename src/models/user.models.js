@@ -10,6 +10,10 @@ const userSchema = new mongoose.Schema({
     required: true,
     unique: true   // 🔥 IMPORTANT (no duplicate users)
   },
+  installationId: {
+  type: Number,
+  default: null,
+},
   repos: [
     {
       name: {
@@ -24,6 +28,7 @@ const userSchema = new mongoose.Schema({
         type: Boolean,
         required: true
       },
+      repoId: { type: Number },
       Projects:[{
          project_url : {type:String},
          slug:{type:String},
