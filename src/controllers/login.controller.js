@@ -114,7 +114,7 @@ export const githubLogin = async (req, res) => {
       secure: true,
     });
 
-    return res.redirect(`${process.env.CALLBACK}/dashboard`);
+    return res.redirect(`${process.env.CALLBACK}/projects`);
   } catch (error) {
     console.error("GitHub Auth Error:", error.response?.data || error.message);
     return res.status(500).json({ error: "Auth failed" });
