@@ -325,29 +325,14 @@ app.post("/project", verifyJWT, async (req, res) => {
 
         // STEP 1: Generate slug
         let projectSlug = "";
-        let existingProject = null;
 
         if (userSlug) {
-            // Check if project with this slug already exists
-            const user = await User.findOne({
-                _id: userId,
-                "repos.name": repoName,
+            const nameExisted = await User.findOne({
                 "repos.Projects.slug": userSlug,
             });
 
-            if (user) {
-                // Existing project found - this is a redeploy
-                const repo = user.repos.find(r => r.name === repoName);
-                existingProject = repo?.Projects?.find(p => p.slug === userSlug);
-            } else {
-                // New project - check if slug is taken by someone else
-                const nameExisted = await User.findOne({
-                    "repos.Projects.slug": userSlug,
-                });
-
-                if (nameExisted) {
-                    return res.status(409).json({ msg: "Name already exists" });
-                }
+            if (nameExisted) {
+                return res.status(409).json({ msg: "Name already exists" });
             }
 
             projectSlug = userSlug;
@@ -361,49 +346,23 @@ app.post("/project", verifyJWT, async (req, res) => {
             return res.status(400).json({ msg: "Invalid env format" });
         }
 
-        // Determine final envs: use from body if provided, otherwise use existing
-        const finalEnvs = envs !== undefined ? envs : (existingProject?.envs || {});
-
         // STEP 2: Store project in DB
-        if (existingProject) {
-            // Update existing project
-            await User.updateOne(
-                { 
-                    _id: userId, 
-                    "repos.name": repoName,
-                    "repos.Projects.slug": projectSlug
-                },
-                {
-                    $set: {
-                        "repos.$[repo].Projects.$[project].updatedAt": new Date(),
+        const updateResult = await User.updateOne(
+            { _id: userId, "repos.name": repoName },
+            {
+                $push: {
+                    "repos.$.Projects": {
+                        project_url: `https://${projectSlug}.cloud-kit.app`,
+                        slug: projectSlug,
+                        repoName,
+                        envs: envs || {},
                     },
                 },
-                {
-                    arrayFilters: [
-                        { "repo.name": repoName },
-                        { "project.slug": projectSlug }
-                    ]
-                }
-            );
-        } else {
-            // Create new project
-            const updateResult = await User.updateOne(
-                { _id: userId, "repos.name": repoName },
-                {
-                    $push: {
-                        "repos.$.Projects": {
-                            project_url: `https://${projectSlug}.cloud-kit.app`,
-                            slug: projectSlug,
-                            repoName,
-                            envs: finalEnvs,
-                        },
-                    },
-                }
-            );
-
-            if (updateResult.modifiedCount === 0) {
-                return res.status(404).json({ msg: "Repo not found" });
             }
+        );
+
+        if (updateResult.modifiedCount === 0) {
+            return res.status(404).json({ msg: "Repo not found" });
         }
 
         logger.info({ projectSlug }, "Project stored in DB");
@@ -434,7 +393,7 @@ app.post("/project", verifyJWT, async (req, res) => {
                             { name: "PROJECT_ID", value: projectSlug },
                             {
                                 name: "PROJECT_ENVS",
-                                value: JSON.stringify(finalEnvs),
+                                value: JSON.stringify(envs || {}),
                             },
                             {
                                 name: "REDIS_CONNECTION_STRING",
@@ -465,6 +424,7 @@ app.post("/project", verifyJWT, async (req, res) => {
         });
     }
 });
+
 //////////////////// Request Logger ////////////////////
 app.use((req, res, next) => {
     logger.info(
