@@ -465,7 +465,6 @@ app.post("/project", verifyJWT, async (req, res) => {
         });
     }
 });
-
 //////////////////// Request Logger ////////////////////
 app.use((req, res, next) => {
     logger.info(
