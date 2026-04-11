@@ -325,14 +325,29 @@ app.post("/project", verifyJWT, async (req, res) => {
 
         // STEP 1: Generate slug
         let projectSlug = "";
+        let existingProject = null;
 
         if (userSlug) {
-            const nameExisted = await User.findOne({
+            // Check if this is a redeploy of existing project
+            const user = await User.findOne({
+                _id: userId,
+                "repos.name": repoName,
                 "repos.Projects.slug": userSlug,
             });
 
-            if (nameExisted) {
-                return res.status(409).json({ msg: "Name already exists" });
+            if (user) {
+                // Existing project - find it
+                const repo = user.repos.find(r => r.name === repoName);
+                existingProject = repo?.Projects?.find(p => p.slug === userSlug);
+            } else {
+                // New project with custom slug - check if slug is taken
+                const nameExisted = await User.findOne({
+                    "repos.Projects.slug": userSlug,
+                });
+
+                if (nameExisted) {
+                    return res.status(409).json({ msg: "Name already exists" });
+                }
             }
 
             projectSlug = userSlug;
@@ -340,34 +355,63 @@ app.post("/project", verifyJWT, async (req, res) => {
             projectSlug = generateSlug();
         }
 
-        logger.info({ projectSlug }, "Generated project slug");
+        logger.info({ projectSlug, isRedeploy: !!existingProject }, "Generated project slug");
 
         if (envs && typeof envs !== "object") {
             return res.status(400).json({ msg: "Invalid env format" });
         }
 
-        // STEP 2: Store project in DB
-        const updateResult = await User.updateOne(
-            { _id: userId, "repos.name": repoName },
-            {
-                $push: {
-                    "repos.$.Projects": {
-                        project_url: `https://${projectSlug}.cloud-kit.app`,
-                        slug: projectSlug,
-                        repoName,
-                        envs: envs || {},
+        // Determine final envs: use from body if provided, otherwise use existing
+        const finalEnvs = envs || existingProject?.envs || {};
+
+        // STEP 2: Store/Update project in DB
+        if (existingProject) {
+            // Update existing project
+            await User.updateOne(
+                { 
+                    _id: userId, 
+                    "repos.name": repoName,
+                    "repos.Projects.slug": projectSlug
+                },
+                {
+                    $set: {
+                        "repos.$[repo].Projects.$[project].updatedAt": new Date(),
+                        "repos.$[repo].Projects.$[project].envs": finalEnvs,
                     },
                 },
-            }
-        );
+                {
+                    arrayFilters: [
+                        { "repo.name": repoName },
+                        { "project.slug": projectSlug }
+                    ]
+                }
+            );
+            logger.info({ projectSlug }, "Project updated in DB");
+        } else {
+            // Create new project
+            const updateResult = await User.updateOne(
+                { _id: userId, "repos.name": repoName },
+                {
+                    $push: {
+                        "repos.$.Projects": {
+                            project_url: `https://${projectSlug}.cloud-kit.app`,
+                            slug: projectSlug,
+                            repoName,
+                            envs: finalEnvs,
+                            createdAt: new Date(),
+                            updatedAt: new Date(),
+                        },
+                    },
+                }
+            );
 
-        if (updateResult.modifiedCount === 0) {
-            return res.status(404).json({ msg: "Repo not found" });
+            if (updateResult.modifiedCount === 0) {
+                return res.status(404).json({ msg: "Repo not found" });
+            }
+            logger.info({ projectSlug }, "Project stored in DB");
         }
 
-        logger.info({ projectSlug }, "Project stored in DB");
-
-        // STEP 3: Trigger ECS task
+        // STEP 3: Trigger ECS task with finalEnvs
         const command = new RunTaskCommand({
             cluster: CONFIG.CLUSTER,
             taskDefinition: CONFIG.TASK,
@@ -393,7 +437,7 @@ app.post("/project", verifyJWT, async (req, res) => {
                             { name: "PROJECT_ID", value: projectSlug },
                             {
                                 name: "PROJECT_ENVS",
-                                value: JSON.stringify(envs || {}),
+                                value: JSON.stringify(finalEnvs),
                             },
                             {
                                 name: "REDIS_CONNECTION_STRING",
@@ -406,7 +450,7 @@ app.post("/project", verifyJWT, async (req, res) => {
         });
 
         await ecsClient.send(command);
-        logger.info({ projectSlug }, "Build queued");
+        logger.info({ projectSlug, envs: finalEnvs }, "Build queued");
 
         return res.status(200).json({
             status: "queued",
