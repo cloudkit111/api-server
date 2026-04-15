@@ -39,6 +39,30 @@ const corsOptions = {
     exposedHeaders: ["Authorization"],
 };
 
+//////////////////// ENV Serializer (fixes Mongoose Map → JSON) ////////////////////
+/**
+ * Safely converts envs to a JSON string regardless of whether it's a
+ * Mongoose Map, native JS Map, or plain object.
+ *
+ * - Mongoose Map  → .toObject() → JSON.stringify
+ * - Native Map    → Object.fromEntries() → JSON.stringify
+ * - Plain object  → JSON.stringify directly
+ * - null/undefined → "{}"
+ */
+function serializeEnvs(envs) {
+    if (!envs) return "{}";
+    // Mongoose Map instance has a toObject() method
+    if (typeof envs.toObject === "function") {
+        return JSON.stringify(envs.toObject());
+    }
+    // Native JS Map
+    if (envs instanceof Map) {
+        return JSON.stringify(Object.fromEntries(envs));
+    }
+    // Plain object (from req.body or already converted)
+    return JSON.stringify(envs);
+}
+
 //////////////////// Helper function for GitHub App ////////////////////
 async function getInstallationOctokit(installationId) {
     const auth = createAppAuth({
@@ -110,7 +134,6 @@ app.post(
             const repoName = payload.repository?.name;
             const sender = payload.sender?.login;
 
-            // 🔍 DEBUG: log what GitHub is sending
             console.log("📦 Webhook payload:", {
                 repoId,
                 repoName,
@@ -152,12 +175,10 @@ app.post(
             });
 
             // ✅ STEP 3: Find user by repoId
-            // Try Number match first, then String match as fallback
             let user = await User.findOne({ "repos.repoId": repoId });
 
             if (!user) {
                 console.log(`⚠️ Number match failed for repoId: ${repoId}, trying string match...`);
-                // Fallback: try string match in case repoId was saved as string
                 user = await User.findOne({ "repos.repoId": String(repoId) });
             }
 
@@ -168,7 +189,6 @@ app.post(
 
             console.log(`✅ User found: ${user.email}`);
 
-            // ✅ Bug 1 fix: cast both sides when finding repo
             const repo = user.repos.find(r => Number(r.repoId) === repoId);
 
             if (!repo) {
@@ -184,6 +204,10 @@ app.post(
             }
 
             console.log(`✅ Project found: slug=${project.slug}`);
+
+            // ✅ DEBUG: log what envs looks like before serializing
+            console.log("🔑 project.envs raw:", project.envs);
+            console.log("🔑 project.envs serialized:", serializeEnvs(project.envs));
 
             // ✅ STEP 4: Trigger ECS build
             const command = new RunTaskCommand({
@@ -208,14 +232,10 @@ app.post(
                         environment: [
                             { name: "GIT_REPOSITORY_URL", value: repoUrl },
                             { name: "PROJECT_ID", value: project.slug },
-                            // ✅ Bug 5 fix: Mongoose Map → plain object before stringify
+                            // ✅ FIXED: use serializeEnvs to handle Mongoose Map correctly
                             {
                                 name: "PROJECT_ENVS",
-                                value: JSON.stringify(
-                                    project.envs instanceof Map
-                                        ? Object.fromEntries(project.envs)
-                                        : (project.envs || {})
-                                ),
+                                value: serializeEnvs(project.envs),
                             },
                             {
                                 name: "REDIS_CONNECTION_STRING",
@@ -346,6 +366,11 @@ app.post("/project", verifyJWT, async (req, res) => {
             return res.status(400).json({ msg: "Invalid env format" });
         }
 
+        // ✅ Normalize envs to a plain object before storing
+        // This prevents Mongoose from storing it as a Map type,
+        // which would cause JSON.stringify to return "{}" on re-read
+        const normalizedEnvs = envs && typeof envs === "object" ? { ...envs } : {};
+
         // STEP 2: Store project in DB
         const updateResult = await User.updateOne(
             { _id: userId, "repos.name": repoName },
@@ -355,7 +380,7 @@ app.post("/project", verifyJWT, async (req, res) => {
                         project_url: `https://${projectSlug}.cloud-kit.app`,
                         slug: projectSlug,
                         repoName,
-                        envs: envs || {},
+                        envs: normalizedEnvs,
                     },
                 },
             }
@@ -366,6 +391,9 @@ app.post("/project", verifyJWT, async (req, res) => {
         }
 
         logger.info({ projectSlug }, "Project stored in DB");
+
+        // ✅ DEBUG: log envs being sent to ECS
+        console.log("🔑 envs being sent to ECS:", serializeEnvs(normalizedEnvs));
 
         // STEP 3: Trigger ECS task
         const command = new RunTaskCommand({
@@ -391,9 +419,10 @@ app.post("/project", verifyJWT, async (req, res) => {
                         environment: [
                             { name: "GIT_REPOSITORY_URL", value: gitURL },
                             { name: "PROJECT_ID", value: projectSlug },
+                            // ✅ FIXED: use serializeEnvs for consistency
                             {
                                 name: "PROJECT_ENVS",
-                                value: JSON.stringify(envs || {}),
+                                value: serializeEnvs(normalizedEnvs),
                             },
                             {
                                 name: "REDIS_CONNECTION_STRING",
