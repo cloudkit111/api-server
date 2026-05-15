@@ -20,11 +20,11 @@ const app = express();
 const server = http.createServer(app);
 
 const io = new Server(server, {
-    cors: { origin: ["https://cloud-kit.app", "http://localhost:5173","https://dev.cloud-kit.app"] },
+    cors: { origin: ["https://cloud-kit.app", "http://localhost:5173","https://dev.cloud-kit.app","https://cloudkit.page"] },
 });
 
 const corsOptions = {
-    origin: ["https://cloud-kit.app", "http://localhost:5173","https://dev.cloud-kit.app"],
+    origin: ["https://cloud-kit.app", "https://cloudkit.page", "http://localhost:5173","https://dev.cloud-kit.app"],
     credentials: true,
     methods: "GET, POST, DELETE, PATCH, HEAD, PUT, OPTIONS",
     allowedHeaders: [
