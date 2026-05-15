@@ -441,7 +441,7 @@ app.post("/project", verifyJWT, async (req, res) => {
             status: "queued",
             data: {
                 projectSlug,
-                url: `https://${projectSlug}.cloud-kit.app`,
+                url: `https://${projectSlug}.app.cloudkit.page`,
             },
         });
 
