@@ -377,7 +377,7 @@ app.post("/project", verifyJWT, async (req, res) => {
             {
                 $push: {
                     "repos.$.Projects": {
-                        project_url: `https://${projectSlug}.cloud-kit.app`,
+                        project_url: `https://${projectSlug}.app.cloudkit.page`,
                         slug: projectSlug,
                         repoName,
                         envs: normalizedEnvs,
