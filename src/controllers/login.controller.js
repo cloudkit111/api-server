@@ -109,7 +109,7 @@ export const githubLogin = async (req, res) => {
       res.cookie('token', token, {
          httpOnly: isProduction,
          maxAge: 30 * 60 * 1000,
-         domain: isProduction ? '.cloudkit.page' : undefined,
+         domain: isProduction ? '.cloud-kit.app' : undefined,
          sameSite: isProduction ? 'none' : 'lax',
          secure: true,
       });
