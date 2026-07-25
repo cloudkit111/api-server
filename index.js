@@ -100,7 +100,7 @@ const ecsClient = new ECSClient({
 
 const CONFIG = {
    CLUSTER: 'arn:aws:ecs:ap-south-1:865343245926:cluster/builder-cluster',
-   TASK: 'arn:aws:ecs:ap-south-1:865343245926:task-definition/builder-task:1',
+   TASK: 'arn:aws:ecs:ap-south-1:865343245926:task-definition/builder-task:3',
 };
 
 //////////////////// Webhook CI/CD ////////////////////
