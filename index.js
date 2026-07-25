@@ -404,7 +404,7 @@ app.post('/project', verifyJWT, async (req, res) => {
          {
             $push: {
                'repos.$.Projects': {
-                  project_url: `https://${projectSlug}.app.cloudkit.page`,
+                  project_url: `https://${projectSlug}.cloudkit.page`,
                   slug: projectSlug,
                   repoName,
                   envs: normalizedEnvs,
@@ -468,7 +468,7 @@ app.post('/project', verifyJWT, async (req, res) => {
          status: 'queued',
          data: {
             projectSlug,
-            url: `https://${projectSlug}.app.cloudkit.page`,
+            url: `https://${projectSlug}.cloudkit.page`,
          },
       });
    } catch (error) {
