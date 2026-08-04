@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import {
+   getAccessToken,
    getCurrentUser,
    githubLogin,
    logout,
@@ -10,4 +11,5 @@ export const githubRouter = Router();
 
 githubRouter.route('/callback').get(githubLogin);
 githubRouter.get('/me', verifyJWT, getCurrentUser);
+githubRouter.get('/get-access-token', verifyJWT, getAccessToken);
 githubRouter.get('/logout', logout);

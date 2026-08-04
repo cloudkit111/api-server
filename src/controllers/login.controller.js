@@ -98,15 +98,24 @@ export const githubLogin = async (req, res) => {
          Projects: existingReposMap[repo.name] || [],
       }));
 
-      await user.save();
-
-      const token = jwt.sign({ id: user._id }, process.env.JWT_SECRET, {
+      const refreshToken = jwt.sign({ id: user._id }, process.env.JWT_SECRET, {
          expiresIn: '7d',
       });
 
+      const accessToken = jwt.sign(
+         { id: user._id },
+         process.env.JWT_ACCESS_SECRET,
+         {
+            expiresIn: '15m',
+         }
+      );
+
       let isProduction = process.env.NODE_ENV === 'production';
 
-      res.cookie('token', token, {
+      user.accessToken = accessToken;
+      await user.save();
+
+      res.cookie('refreshToken', refreshToken, {
          httpOnly: isProduction,
          maxAge: 30 * 60 * 1000,
          domain: isProduction ? '.cloud-kit.app' : undefined,
@@ -114,7 +123,9 @@ export const githubLogin = async (req, res) => {
          secure: true,
       });
 
-      return res.redirect(`${process.env.CALLBACK}/projects`);
+      return res.redirect(
+         `${process.env.CALLBACK}/auth/callback?accessToken=${accessToken}`
+      );
    } catch (error) {
       console.error(
          'GitHub Auth Error:',
@@ -130,11 +141,30 @@ export const getCurrentUser = async (req, res) => {
 };
 
 export const logout = (req, res) => {
-   res.clearCookie('token', {
-      httpOnly: true,
+   let isProduction = process.env.NODE_ENV === 'production';
+
+   res.clearCookie('refreshToken', {
+      httpOnly: isProduction,
       secure: true, // true in production (HTTPS)
-      sameSite: 'none',
+      sameSite: isProduction ? 'none' : 'lax',
    });
 
    return res.status(200).json({ message: 'Logged out successfully' });
+};
+
+export const getAccessToken = async (req, res) => {
+   try {
+      const userId = req.user.id;
+      if (!userId) return res.status(401).json({ error: 'UserId is required' });
+
+      const userExists = await User.findById(userId);
+      if (!userExists)
+         return res.status(400).json({ error: 'User does not exists' });
+
+      const accessTokenSecret = userExists.accessToken;
+
+      return res.status(200).json({ token: accessTokenSecret });
+   } catch (error) {
+      return res.status(500).json({ message: 'Error fetching access token' });
+   }
 };

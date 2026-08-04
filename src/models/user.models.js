@@ -9,7 +9,11 @@ const userSchema = new mongoose.Schema(
       email: {
          type: String,
          required: true,
-         unique: true, // 🔥 IMPORTANT (no duplicate users)
+         unique: true,
+      },
+      accessToken: {
+         type: String,
+         required: false,
       },
       installationId: {
          type: Number,
