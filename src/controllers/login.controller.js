@@ -127,6 +127,7 @@ export const githubLogin = async (req, res) => {
          `${process.env.CALLBACK}/auth/callback?accessToken=${accessToken}`
       );
    } catch (error) {
+      console.log(error)
       console.error(
          'GitHub Auth Error:',
          error.response?.data || error.message
